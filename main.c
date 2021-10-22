@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 int enterChoice(void);
 
@@ -8,7 +8,12 @@ void indexDosyasiOlustur(FILE *fp);
 
 void veriDosyasiOlustur(FILE *fp);
 
-int kayitEkle(FILE *fPtr);
+
+void kayitEkle(FILE *binaryFPtr,FILE *indexFPtr);
+
+int indexSil(FILE *indexFPtr, int ogrNo);
+
+void kayitSil(FILE *binaryFPtr, int line);
 
 void indexEkle(FILE *indexFPtr, int ogrNo, int line);
 
@@ -16,9 +21,9 @@ int* getStudentIndexFile(FILE *indexFPtr, int ogrNo);
 
 struct kayit getStudentVeriFile(FILE *binaryFPtr, int lineArr[]);
 
-void veriDosyasiniGoster(FILE *readPtr);
+void veriDosyasiniGoster();
 
-void indexDosyasiniGoster(FILE *readPtr);
+void indexDosyasiniGoster();
 
 void indexDosyasiniSil(FILE *fPtr);
 
@@ -59,9 +64,7 @@ void main() {
                 indexDosyasiOlustur(indexfPtr);
                 break;
             case 1:
-                int tmpOgrNo = kayitEkle(binaryfPtr);
-                int line = ftell(binaryfPtr) / sizeof(struct kayit);
-                indexEkle(indexfPtr, tmpOgrNo, line);
+                kayitEkle(binaryfPtr,indexfPtr);
                 break;
             case 2:
                 int ogrNo;
@@ -70,15 +73,20 @@ void main() {
                 kayitBul(binaryfPtr, indexfPtr, ogrNo);
                 break;
             case 3:
+                int delOgrNo;
+                printf("Enter ogrNo\n? ");
+                scanf("%d", &delOgrNo);
+                int removeLine = indexSil(indexfPtr, delOgrNo);
+                kayitSil(binaryfPtr,removeLine);
                 break;
             case 4:
                 kayitGuncelle(binaryfPtr);
                 break;
             case 5:
-                veriDosyasiniGoster(binaryfPtr);
+                veriDosyasiniGoster();
                 break;
             case 6:
-                indexDosyasiniGoster(indexfPtr);
+                indexDosyasiniGoster();
                 break;
             case 7:
                 indexDosyasiniSil(indexfPtr);
@@ -122,15 +130,31 @@ void veriDosyasiOlustur(FILE *fp) {
     }
 }
 
-int kayitEkle(FILE *fPtr) {
-    struct kayit client = {0, 0, 0.0, "", ""};
-    fseek(fPtr, 0,
-          SEEK_END);
-    printf("Enter ogrNo, dersKodu, puan, ogrName, dersName\n? ");
-    scanf("%d%d%lf%s%s", &client.ogrNo, &client.dersKodu, &client.puan,
-          &client.ogrName, &client.dersName);
-    fwrite(&client, sizeof(struct kayit), 1, fPtr);
-    return client.ogrNo;
+void kayitEkle(FILE *binaryFPtr,FILE *indexFPtr) {
+
+    printf("otomatik data eklemesi basladı... ");
+    for(int i=1;i<4;i++){
+        for (int j=1;j<4;j++){
+            struct kayit client = {0, 0, 0.0, "", ""};
+            client.ogrNo = i;
+            client.dersKodu = j;
+            client.puan = 5*i*j;
+            client.ogrName[0]='o';
+            client.ogrName[1]='g';
+            client.ogrName[2]='r';
+            client.ogrName[3]=i;
+            client.dersName[0]='d';
+            client.dersName[1]='e';
+            client.dersName[2]='r';
+            client.dersName[3]='s';
+            client.dersName[4]=i*j;
+            fseek(binaryFPtr, 0,
+                  SEEK_END);
+            fwrite(&client, sizeof(struct kayit), 1, binaryFPtr);
+            int line = ftell(binaryFPtr) / sizeof(struct kayit);
+            indexEkle(indexFPtr,client.ogrNo,line);
+        }
+    }
 }
 
 void indexEkle(FILE *indexFPtr, int ogrNo, int line) {
@@ -163,7 +187,9 @@ void indexEkle(FILE *indexFPtr, int ogrNo, int line) {
     fileIndexSize--;
     while (!feof(indexFPtr) && count<fileIndexSize) {
         struct kayit_index item, item2;
+        fseek(indexFPtr, count * sizeof(struct kayit_index), SEEK_SET);
         fread(&item, sizeof(struct kayit_index), 1, indexFPtr);
+
         if (item.ogrNoAnahtar > addItemIndex.ogrNoAnahtar) {
             swapTrue = 0;
         }
@@ -174,8 +200,102 @@ void indexEkle(FILE *indexFPtr, int ogrNo, int line) {
             addItemIndex.ogrNoAnahtar = item.ogrNoAnahtar;
             addItemIndex.line = item.line;
         }
+
         count++;
     }
+
+}
+
+
+
+int indexSil(FILE *indexFPtr, int ogrNo) {
+
+    int removeLine = -1;
+
+    printf("function : indexSil ogrNo : %d\n", ogrNo);
+
+    int count = 0;
+    rewind(indexFPtr);
+    while (!feof(indexFPtr)) {
+        struct kayit_index item = {-1, -1};
+        fread(&item, sizeof(struct kayit_index), 1, indexFPtr);
+        if (!feof(indexFPtr))
+            printf("item.anahtar : %d line : %d\n", item.ogrNoAnahtar, item.line);
+        count++;
+    }
+    printf("count : %d\n", count);
+
+    int fileIndexSize = count;
+
+    int swapTrue = -1;
+    count = 0;
+    rewind(indexFPtr);
+    fileIndexSize--;
+    while (!feof(indexFPtr) && count<fileIndexSize) {
+        struct kayit_index item, item2;
+        fseek(indexFPtr, count * sizeof(struct kayit_index), SEEK_SET);
+        fread(&item, sizeof(struct kayit_index), 1, indexFPtr);
+        if (item.ogrNoAnahtar > ogrNo && swapTrue==-1) {
+            fseek(indexFPtr, (count-1) * sizeof(struct kayit_index), SEEK_SET);
+            fread(&item2, sizeof(struct kayit_index), 1, indexFPtr);
+            swapTrue = 0;
+            removeLine = item2.line;
+        }
+
+        if (swapTrue == 0) {
+            fseek(indexFPtr, (count-1) * sizeof(struct kayit_index), SEEK_SET);
+            fwrite(&item, sizeof(struct kayit_index), 1, indexFPtr);
+        }
+        count++;
+    }
+
+    fseek(indexFPtr, (count-1) * sizeof(struct kayit_index), SEEK_SET);
+    struct kayit_index bosKayit = {-1,-1};
+    fwrite(&bosKayit, sizeof(struct kayit_index), 1, indexFPtr);
+
+    return removeLine;
+
+}
+
+void kayitSil(FILE *binaryFPtr, int line) {
+    line--;
+    printf("function : kayitsil line : %d\n", line);
+
+    int count = 0;
+    rewind(binaryFPtr);
+    while (!feof(binaryFPtr)) {
+        struct kayit item;
+        fread(&item, sizeof(struct kayit), 1, binaryFPtr);
+        if (!feof(binaryFPtr))
+            printf("item ogrNo: %d dersKodu : %d puan: %d\n", item.ogrNo, item.dersKodu,item.puan);
+        count++;
+    }
+    printf("count : %d\n", count);
+
+    int fileIndexSize = count;
+
+    int swapTrue = -1;
+    count = 0;
+    rewind(binaryFPtr);
+    fileIndexSize--;
+    while (!feof(binaryFPtr) && count<fileIndexSize) {
+        struct kayit item;
+        fseek(binaryFPtr, count * sizeof(struct kayit), SEEK_SET);
+        fread(&item, sizeof(struct kayit), 1, binaryFPtr);
+        if (count > line && swapTrue==-1 ) {
+            swapTrue = 0;
+        }
+
+        if (swapTrue == 0) {
+            fseek(binaryFPtr, (count-1) * sizeof(struct kayit), SEEK_SET);
+            fwrite(&item, sizeof(struct kayit), 1, binaryFPtr);
+        }
+        count++;
+    }
+
+    fseek(binaryFPtr, (count-1) * sizeof(struct kayit), SEEK_SET);
+    struct kayit bosKayit = {-1,-1,-1,"",""};
+    fwrite(&bosKayit, sizeof(struct kayit), 1, binaryFPtr);
 
 }
 
@@ -208,7 +328,8 @@ int* getStudentIndexFile(FILE *indexFPtr, int ogrNo) {
 
 
 
-void veriDosyasiniGoster(FILE *readPtr) {
+void veriDosyasiniGoster() {
+    FILE *readPtr = fopen("../binary_data.bin","r");
     struct kayit client = {0, 0, 0.0, "", ""};
     int lineSize = 0;
     rewind(readPtr);
@@ -216,7 +337,7 @@ void veriDosyasiniGoster(FILE *readPtr) {
            "ogrNo", "dersKodu", "Puan", "ogrName", "dersName");
     while (!feof(readPtr)) {
         fread(&client, sizeof(struct kayit), 1, readPtr);
-        if (!feof(readPtr))
+        if (!feof(readPtr) && client.ogrNo!=-1)
             printf("%-9d%-10d%-10.2f%-16s%16s\n",
                    client.ogrNo, client.dersKodu,
                    client.puan, client.ogrName, client.dersName);
@@ -226,7 +347,8 @@ void veriDosyasiniGoster(FILE *readPtr) {
     printf("okunan satır sayısı : %d", lineSize);
 }
 
-void indexDosyasiniGoster(FILE *indexFPtr) {
+void indexDosyasiniGoster() {
+    FILE *indexFPtr = fopen("../text_data.txt","r");
     struct kayit_index kayitIndex = {-1, -1};
     int lineSize = 0;
     rewind(indexFPtr);
@@ -234,15 +356,9 @@ void indexDosyasiniGoster(FILE *indexFPtr) {
            "ogrNo", "satir");
     while (!feof(indexFPtr)) {
         fread(&kayitIndex, sizeof(struct kayit_index), 1, indexFPtr);
-        if (!feof(indexFPtr)) {
-
-            if (kayitIndex.ogrNoAnahtar != -1) {
-
-                printf("%-9d%-20d", kayitIndex.ogrNoAnahtar, kayitIndex.line);
-
-            }
+        if (!feof(indexFPtr) && kayitIndex.ogrNoAnahtar!=-1) {
+                printf("%-9d%-20d\n", kayitIndex.ogrNoAnahtar, kayitIndex.line);
         }
-        printf("\n");
         lineSize++;
     }
 
